@@ -69,7 +69,6 @@ void saveHomeOffset() { EEPROM.put(ADDR_HOME_OFFSET, stepsFromHallToZero); }
 void saveTotalSteps() { EEPROM.put(ADDR_TOTAL_STEPS, totalStepsPerRev); }
 
 void saveState() {
-  // THE COMPROMISE: Only wear out the EEPROM if Auto-Home is explicitly DISABLED
   if (!autoHomeEnabled) {
     EEPROM.put(ADDR_SAVED_POS, currentStepPos);
     EEPROM.put(ADDR_SAVED_INDEX, currentFlapIndex);
@@ -81,6 +80,39 @@ void updateIdChars() {
     idChars[0] = (moduleId / 10) + '0';
     idChars[1] = (moduleId % 10) + '0';
   }
+}
+
+void dumpEeprom() {
+  // CRITICAL FIX: Give the Raspberry Pi's USB dongle 50ms to switch into listening mode
+  delay(50); 
+  digitalWrite(RS485_DE, HIGH);
+  delay(10); 
+  
+  rs485.print("m");
+  if(moduleId < 10) rs485.print("0");
+  rs485.print(moduleId);
+  rs485.print("d:");
+  rs485.print(stepsFromHallToZero);
+  rs485.print(":");
+  rs485.print(totalStepsPerRev);
+  rs485.print(":");
+  
+  bool first = true;
+  for(int i=0; i<64; i++) {
+    uint16_t pos = 0xFFFF;
+    EEPROM.get(ADDR_MAP_START + (i * 2), pos);
+    if(pos != 0xFFFF) {
+      if(!first) rs485.print(",");
+      rs485.print(i);
+      rs485.print("=");
+      rs485.print(pos);
+      first = false;
+    }
+  }
+  
+  rs485.print("\n");
+  delay(100); 
+  digitalWrite(RS485_DE, LOW);
 }
 
 // ==========================================
@@ -173,8 +205,10 @@ void calibrateModule() {
     measuredSteps++;
   }
 
+  // CRITICAL FIX: Wait for Pi to be ready
+  delay(50);
   digitalWrite(RS485_DE, HIGH);
-  delay(5); 
+  delay(10); 
   
   rs485.print("m");
   if(moduleId < 100) {
@@ -184,10 +218,10 @@ void calibrateModule() {
     rs485.print("XX");
   }
   rs485.print(":");
-  rs485.println(measuredSteps);
+  rs485.print(measuredSteps);
+  rs485.print("\n");
   
-  rs485.flush(); 
-  delay(5);
+  delay(100); 
   digitalWrite(RS485_DE, LOW);
   
   totalStepsPerRev = measuredSteps;
@@ -275,14 +309,10 @@ void setup() {
   
   if (autoHomeEnabled) {
     homeModule();
-    saveState(); // Will safely do nothing because autoHomeEnabled is true
+    saveState();
   } else {
-    // Restore state from memory
     EEPROM.get(ADDR_SAVED_POS, currentStepPos);
-    
-    // Safety check in case memory is corrupted or uninitialized
     if (currentStepPos >= totalStepsPerRev) currentStepPos = 0;
-    
     currentFlapIndex = (int8_t)EEPROM.read(ADDR_SAVED_INDEX);
   }
 }
@@ -308,6 +338,7 @@ void loop() {
         else if (c == 'w') { buffer = ""; tempIndex = -1; parseState = 9; } 
         else if (c == 'i') { buffer = ""; parseState = 10; } 
         else if (c == 'a') { buffer = ""; parseState = 11; } 
+        else if (c == 'd') { dumpEeprom(); parseState = 0; } 
         else if (c == 'e') { 
           for(int i=0; i<64; i++) {
             uint16_t empty = 0xFFFF;
@@ -405,7 +436,7 @@ void loop() {
           if (buffer.length() > 0) {
             autoHomeEnabled = (buffer.toInt() == 1);
             EEPROM.write(ADDR_AUTO_HOME, autoHomeEnabled ? 1 : 0);
-            saveState(); // Instantly save current resting state if we just turned Auto-Home OFF
+            saveState();
           }
           parseState = 0;
         }
@@ -413,7 +444,6 @@ void loop() {
     }
   }
 
-  // Timeouts for number parsing
   if ((parseState >= 5 && parseState <= 11) && (millis() - lastSerialTime > 50)) {
     if (buffer.length() > 0) {
       if (parseState == 5) { stepsFromHallToZero = buffer.toInt(); saveHomeOffset(); }

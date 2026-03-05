@@ -58,6 +58,7 @@
 
         .config-section { background: var(--panel); padding: 20px; border-radius: 12px; margin-bottom: 30px; border: 1px solid var(--border); }
         
+        /* New Tuning UI CSS */
         .mod-matrix { display: grid; grid-template-columns: repeat(15, 1fr); gap: 4px; margin-bottom: 20px; }
         .mod-cell { background: #2a2a2a; border: 1px solid var(--border); padding: 10px 0; text-align: center; cursor: pointer; font-family: monospace; font-size: 0.9rem; border-radius: 4px; color: #aaa; transition: 0.1s;}
         .mod-cell:hover { background: #444; color: white;}
@@ -80,10 +81,11 @@
         .char-cell:hover { border-color: var(--accent); }
         .char-cell .char-id { font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; font-family: 'Courier New', monospace;}
         .char-cell .char-step { font-family: monospace; font-size: 0.85rem; color: #888; }
-        .char-cell.tuned { background: #4a452a; border-color: #f0e68c; } 
+        .char-cell.tuned { background: #4a452a; border-color: #f0e68c; } /* Pale yellow indicator */
         .char-cell.tuned .char-id { color: #f0e68c; }
         .char-cell.tuned .char-step { color: #fff; }
 
+        /* Modal styling */
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 100; }
         .modal-content { background: var(--panel); padding: 25px; border-radius: 12px; border: 2px solid var(--accent); width: 350px; text-align: center; }
         .modal-content input { font-size: 1.5rem; text-align: center; margin: 15px 0; }
@@ -106,17 +108,7 @@
     </div>
 
     <div id="page-control" class="page active">
-        <div class="live-view-container" style="margin-bottom: 25px;">
-            <div style="text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 5px; font-weight: bold; letter-spacing: 1px;">CURRENT LIVE DISPLAY</div>
-            <div class="preview-wrapper" style="position: relative; margin-bottom: 0;">
-                <div class="preview-grid live-view-grid"></div>
-                <div class="homing-overlay" style="position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.85); color: var(--orange); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.5rem; letter-spacing: 2px;">HOMING REQUIRED</div>
-            </div>
-        </div>
-
-        <div style="text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 5px; font-weight: bold; letter-spacing: 1px;">INPUT QUEUE</div>
         <div class="preview-wrapper"><div class="preview-grid" id="preview"></div></div>
-        
         <div class="control-panel">
             <label style="cursor: pointer;"><input type="checkbox" id="modeToggle" onchange="toggleMultiMode()"> <strong>Multi-Page Playlist</strong></label>
             <label style="cursor: pointer;"><input type="checkbox" id="centerToggle" onchange="updatePreview()"> Center Text</label>
@@ -136,40 +128,29 @@
         <input type="text" id="L2" class="line-input" placeholder="LINE 2" oninput="updatePreview()">
         <input type="text" id="L3" class="line-input" placeholder="LINE 3" oninput="updatePreview()">
         <div id="multiControls" style="display:none;" class="playlist-area">
-            <button class="btn btn-success" id="saveMsgBtn" style="width:100%" onclick="saveMessage()">+ Add Current View to Playlist</button>
+            <button class="btn btn-success" style="width:100%" onclick="addToPlaylist()">+ Add Current View to Playlist</button>
             <div id="playlistList" style="margin-top:15px;"></div>
             <div style="margin-top:15px; padding-top:10px; border-top:1px solid #444;">
-                <label>Reading Delay (seconds): <input type="number" id="delayInput" value="5" style="width: 60px; padding: 5px; background:#111; color:white; border:1px solid #555;"></label>
+                <label>Loop Delay (seconds): <input type="number" id="delayInput" value="5" style="width: 60px; padding: 5px; background:#111; color:white; border:1px solid #555;"></label>
             </div>
         </div>
         <button class="btn btn-primary" onclick="sync()">PUSH TO DISPLAY</button>
     </div>
 
     <div id="page-apps" class="page">
-        <div class="live-view-container" style="margin-bottom: 25px;">
-            <div style="text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 5px; font-weight: bold; letter-spacing: 1px;">CURRENT LIVE DISPLAY</div>
-            <div class="preview-wrapper" style="position: relative; margin-bottom: 0;">
-                <div class="preview-grid live-view-grid"></div>
-                <div class="homing-overlay" style="position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.85); color: var(--orange); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.5rem; letter-spacing: 2px;">HOMING REQUIRED</div>
-            </div>
-        </div>
-
         <h3>Available Apps</h3>
         <p style="color:#888;">Select an app to take over the display loop.</p>
         <div class="apps-grid">
             <div class="app-card" onclick="runApp('dashboard')"><span class="app-icon">🏠</span><span class="app-name">Dashboard</span></div>
-            <div class="app-card" onclick="runApp('time')"><span class="app-icon">⏱️</span><span class="app-name">Time</span></div>
-            <div class="app-card" onclick="runApp('date')"><span class="app-icon">📅</span><span class="app-name">Date</span></div>
             <div class="app-card" onclick="runApp('metro')"><span class="app-icon">🚇</span><span class="app-name">Metro</span></div>
             <div class="app-card" onclick="runApp('weather')"><span class="app-icon">🌤️</span><span class="app-name">Weather</span></div>
             <div class="app-card" onclick="runApp('stocks')"><span class="app-icon">📈</span><span class="app-name">Stocks</span></div>
             <div class="app-card" onclick="runApp('sports')"><span class="app-icon">🏒</span><span class="app-name">Sports</span></div>
-            <div class="app-card" onclick="runApp('youtube')"><span class="app-icon">▶️</span><span class="app-name">YouTube Subs</span></div>
-            <div class="app-card" onclick="runApp('yt_comments')"><span class="app-icon">💬</span><span class="app-name">YT Comments</span></div>
         </div>
     </div>
 
     <div id="page-tuning" class="page">
+        
         <div class="config-section" style="border-left: 5px solid var(--accent);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
                 <h3 style="margin:0;">Hardware Inspector</h3>
@@ -261,18 +242,6 @@
                     <label style="display:block; margin-bottom:5px; color:#888;">NHL Teams (comma separated)</label>
                     <input type="text" id="nhlInput" class="line-input" style="font-size:1rem; margin:0;">
                 </div>
-                <div style="grid-column: span 2;">
-                    <label style="display:block; margin-bottom:5px; color:#888;">YouTube Channel ID (e.g., UC2GJfspFn6o4liy6GaBFtHA)</label>
-                    <input type="text" id="ytInput" class="line-input" style="font-size:1rem; margin:0;">
-                </div>
-                <div style="grid-column: span 2;">
-                    <label style="display:block; margin-bottom:5px; color:#888;">YouTube Data API Key (Needed for Comments)</label>
-                    <input type="password" id="ytApiInput" class="line-input" style="font-size:1rem; margin:0;">
-                </div>
-                <div style="grid-column: span 2;">
-                    <label style="display:block; margin-bottom:5px; color:#888;">YouTube Video ID (e.g., dQw4w9WgXcQ)</label>
-                    <input type="text" id="ytVideoInput" class="line-input" style="font-size:1rem; margin:0;">
-                </div>
             </div>
             <button class="btn btn-secondary" style="margin-top:15px;" onclick="saveGlobal()">Save Settings</button>
         </div>
@@ -299,49 +268,11 @@
 <script>
     const CHAR_MAP = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$&()-+=;q:%'.,/?*roygbpw";
     const COLOR_DISP = {'r':'🟥', 'o':'🟧', 'y':'🟨', 'g':'🟩', 'b':'🟦', 'p':'🟪', 'w':'⬜', ' ':'⬛'};
-    const COLOR_REVERSE = {'r':'🟥', 'o':'🟧', 'y':'🟨', 'g':'🟩', 'b':'🟦', 'p':'🟪', 'w':'⬜'};
     
     let globalSettings = null;
     let selectedModule = 0;
     let selectedCharIndex = 0;
     let playlist = [];
-    let editingIndex = null;
-
-    // --- CURSOR TRACKING FOR EMOJIS ---
-    let lastFocusedInput = null;
-    let lastCursorPos = 0;
-
-    document.querySelectorAll('.line-input').forEach(el => {
-        const updateCursor = (e) => {
-            lastFocusedInput = e.target;
-            lastCursorPos = e.target.selectionStart || 0;
-        };
-        el.addEventListener('focus', updateCursor);
-        el.addEventListener('keyup', updateCursor);
-        el.addEventListener('click', updateCursor);
-    });
-
-    // --- LIVE VIEW POLLING ---
-    setInterval(() => {
-        fetch('/current_state').then(r => r.json()).then(data => {
-            document.querySelectorAll('.homing-overlay').forEach(el => {
-                el.style.display = data.is_homed ? 'none' : 'flex';
-            });
-            const grids = document.querySelectorAll('.live-view-grid');
-            grids.forEach(grid => {
-                grid.innerHTML = '';
-                let stateStr = data.state || "";
-                for(let i=0; i<45; i++) {
-                    let char = stateStr[i] || ' ';
-                    if (COLOR_REVERSE[char]) char = COLOR_REVERSE[char];
-                    const div = document.createElement('div');
-                    div.className = 'flap-unit';
-                    div.innerText = char === " " ? "" : char;
-                    grid.appendChild(div);
-                }
-            });
-        }).catch(e => {});
-    }, 1000);
 
     function switchTab(name) {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -351,10 +282,12 @@
         if(name === 'tuning') loadSettingsData();
     }
 
+    // --- NEW UI RENDERING LOGIC ---
     function loadSettingsData() {
         document.getElementById('modMatrix').innerHTML = '<div style="color:white; grid-column:span 15; text-align:center;">Loading...</div>';
         fetch('/settings').then(r => r.json()).then(data => {
             globalSettings = data;
+            
             document.getElementById('zipInput').value = data.zip_code || "";
             document.getElementById('tzInput').value = data.timezone || "";
             document.getElementById('keyInput').value = data.weather_api_key || "";
@@ -362,12 +295,10 @@
             document.getElementById('routeInput').value = data.mbta_route || "";
             document.getElementById('stockInput').value = data.stocks_list || "";
             document.getElementById('nhlInput').value = data.nhl_teams || "";
-            document.getElementById('ytInput').value = data.yt_channel_id || "";
-            document.getElementById('ytApiInput').value = data.yt_api_key || "";
-            document.getElementById('ytVideoInput').value = data.yt_video_id || "";
             document.getElementById('autoHomeToggle').checked = data.auto_home;
+
             renderModuleGrid();
-            selectModule(selectedModule); 
+            selectModule(selectedModule); // Selects module 0 initially
         });
     }
 
@@ -385,35 +316,45 @@
 
     function selectModule(id) {
         selectedModule = id;
-        renderModuleGrid(); 
+        renderModuleGrid(); // Updates active class
+        
         document.getElementById('inspectorPanel').style.display = 'flex';
         document.getElementById('inspectTitle').innerText = `MODULE ${id.toString().padStart(2, '0')}`;
+        
         const offset = globalSettings.offsets[id.toString()] || 2832;
         const total = globalSettings.calibrations[id.toString()] || 4096;
         document.getElementById('inspectOffset').innerText = offset;
         document.getElementById('inspectCalib').innerText = total;
+        
         renderCharGrid();
     }
 
     function renderCharGrid() {
         const grid = document.getElementById('charMatrix');
         grid.innerHTML = '';
+        
         const tunedMap = globalSettings.tuned_chars[selectedModule.toString()] || {};
+        
         for(let i=0; i<64; i++) {
             const char = CHAR_MAP[i];
             const displayChar = COLOR_DISP[char] || char;
             const expectedStep = i * 64; 
+            
             const isTuned = tunedMap[i.toString()] !== undefined;
             const actualStep = isTuned ? tunedMap[i.toString()] : expectedStep;
             
             const cell = document.createElement('div');
             cell.className = `char-cell ${isTuned ? 'tuned' : ''}`;
-            cell.innerHTML = `<div class="char-id">${displayChar}</div><div class="char-step">${actualStep}</div>`;
+            cell.innerHTML = `
+                <div class="char-id">${displayChar}</div>
+                <div class="char-step">${actualStep}</div>
+            `;
             cell.onclick = () => openCharModal(i, displayChar, expectedStep, actualStep);
             grid.appendChild(cell);
         }
     }
 
+    // --- HARDWARE ACTIONS ---
     function adjustOffset(delta) {
         fetch('/settings', { 
             method: 'POST', 
@@ -441,7 +382,8 @@
             if(data.status === 'success') {
                 globalSettings.calibrations[selectedModule.toString()] = data.steps;
                 document.getElementById('inspectCalib').innerText = data.steps;
-            }
+                alert(`Calibration complete.`);
+            } else alert("Calibration failed.");
         });
     }
 
@@ -455,7 +397,7 @@
             if(d.status === 'success') {
                 globalSettings = d.settings;
                 selectModule(selectedModule);
-            }
+            } else alert("Sync failed. Check connection.");
         });
     }
 
@@ -466,9 +408,11 @@
             document.body.style.cursor = 'default';
             globalSettings = d.settings;
             selectModule(selectedModule);
+            alert("Sync complete!");
         });
     }
 
+    // --- MODAL LOGIC ---
     function openCharModal(index, displayChar, expected, current) {
         selectedCharIndex = index;
         document.getElementById('modalTitle').innerText = `Tune Character: ${displayChar}`;
@@ -481,12 +425,14 @@
 
     function modalAction(action) {
         const step = document.getElementById('modalInput').value;
+        
         fetch('/custom_tune', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ action: action, id: selectedModule, index: selectedCharIndex, step: step })
         }).then(r => r.json()).then(data => {
             if(action === 'save' || action === 'erase') {
+                // Update local memory so UI refreshes without polling
                 if(action === 'save') {
                     if(!globalSettings.tuned_chars[selectedModule]) globalSettings.tuned_chars[selectedModule] = {};
                     globalSettings.tuned_chars[selectedModule][selectedCharIndex] = parseInt(step);
@@ -499,20 +445,17 @@
         });
     }
 
+    // --- OLD FUNCTIONS RETAINED FOR CONTROL PANEL ---
     function insertColor(emoji) {
-        const target = lastFocusedInput || document.getElementById('L1');
-        if (target.id === 'tuneChar') {
-            target.value = emoji;
-            return;
-        }
+        const active = document.activeElement;
+        const target = (active && active.classList.contains('line-input')) ? active : document.getElementById('L1');
         let chars = Array.from(target.value);
         if (chars.length >= 15) return; 
+        const start = target.selectionStart;
         const text = target.value;
-        const start = lastCursorPos;
-        target.value = text.substring(0, start) + emoji + text.substring(start);
-        lastCursorPos += emoji.length;
+        target.value = text.substring(0, start) + emoji + text.substring(target.selectionEnd);
         target.focus();
-        target.selectionStart = target.selectionEnd = lastCursorPos;
+        target.selectionStart = target.selectionEnd = start + emoji.length;
         updatePreview();
     }
 
@@ -550,104 +493,35 @@
 
     function clearDisplay() {
         document.getElementById('L1').value = ""; document.getElementById('L2').value = ""; document.getElementById('L3').value = "";
-        if(editingIndex !== null) {
-            editingIndex = null;
-            document.getElementById('saveMsgBtn').innerText = "+ Add Current View to Playlist";
-        }
         updatePreview();
     }
 
     function toggleMultiMode() { document.getElementById('multiControls').style.display = document.getElementById('modeToggle').checked ? 'block' : 'none'; }
-    
-    function saveMessage() {
-        const item = {
-            text: updatePreview(),
-            rawL1: document.getElementById('L1').value,
-            rawL2: document.getElementById('L2').value,
-            rawL3: document.getElementById('L3').value,
-            centered: document.getElementById('centerToggle').checked
-        };
-        
-        if (editingIndex !== null) {
-            playlist[editingIndex] = item;
-            editingIndex = null;
-            document.getElementById('saveMsgBtn').innerText = "+ Add Current View to Playlist";
-            clearDisplay();
-        } else {
-            playlist.push(item);
-        }
-        renderPlaylist();
-    }
-    
+    function addToPlaylist() { playlist.push(updatePreview()); renderPlaylist(); }
     function renderPlaylist() {
         const list = document.getElementById('playlistList');
         list.innerHTML = playlist.length ? '' : '<div style="color:#666; font-style:italic;">Queue is empty</div>';
         playlist.forEach((item, idx) => {
             const div = document.createElement('div');
             div.className = 'playlist-item';
-            div.style.flexDirection = 'column';
-            div.style.alignItems = 'stretch';
-            div.style.gap = '10px';
-            
-            let arr = Array.from(item.text);
-            let l1 = arr.slice(0, 15).join('').replace(/ /g, '&nbsp;');
-            let l2 = arr.slice(15, 30).join('').replace(/ /g, '&nbsp;');
-            let l3 = arr.slice(30, 45).join('').replace(/ /g, '&nbsp;');
-            
-            div.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="color:var(--accent); font-weight:bold;">Page ${idx+1}</span>
-                    <div style="display:flex; gap: 5px;">
-                        <button class="btn btn-secondary" style="padding: 4px 8px; font-size:0.8rem;" onclick="movePlaylist(${idx}, -1)">▲</button>
-                        <button class="btn btn-secondary" style="padding: 4px 8px; font-size:0.8rem;" onclick="movePlaylist(${idx}, 1)">▼</button>
-                        <button class="btn btn-secondary" style="padding: 4px 8px; font-size:0.8rem;" onclick="editPlaylist(${idx})">EDIT</button>
-                        <button class="btn-del" onclick="removeFromPlaylist(${idx})">DEL</button>
-                    </div>
-                </div>
-                <div style="background:#111; padding:12px; border-radius:4px; font-family:'Courier New', monospace; font-size:1.1rem; line-height:1.4; text-align:center; letter-spacing:2px; border: 1px solid #333;">${l1}<br>${l2}<br>${l3}</div>
-            `;
+            div.innerHTML = `<span><strong>Pg ${idx+1}:</strong> ${item.substring(0,12)}...</span><button class="btn-del" onclick="removeFromPlaylist(${idx})">DEL</button>`;
             list.appendChild(div);
         });
     }
-
-    function editPlaylist(idx) {
-        editingIndex = idx;
-        const item = playlist[idx];
-        document.getElementById('L1').value = item.rawL1;
-        document.getElementById('L2').value = item.rawL2;
-        document.getElementById('L3').value = item.rawL3;
-        document.getElementById('centerToggle').checked = item.centered;
-        document.getElementById('saveMsgBtn').innerText = `Save Changes to Page ${idx+1}`;
-        updatePreview();
-    }
-    
-    function movePlaylist(idx, dir) {
-        if (idx + dir < 0 || idx + dir >= playlist.length) return;
-        const temp = playlist[idx];
-        playlist[idx] = playlist[idx + dir];
-        playlist[idx + dir] = temp;
-        if (editingIndex === idx) editingIndex = idx + dir;
-        else if (editingIndex === idx + dir) editingIndex = idx;
-        renderPlaylist();
-    }
-
-    function removeFromPlaylist(idx) { 
-        playlist.splice(idx, 1); 
-        if(editingIndex === idx) clearDisplay();
-        else if (editingIndex > idx) editingIndex--;
-        renderPlaylist(); 
-    }
+    function removeFromPlaylist(idx) { playlist.splice(idx, 1); renderPlaylist(); }
 
     function sync() {
         const payload = {
-            pages: document.getElementById('modeToggle').checked ? playlist.map(p => p.text) : [updatePreview()],
+            pages: document.getElementById('modeToggle').checked ? playlist : [updatePreview()],
             delay: document.getElementById('delayInput').value
         };
-        fetch('/update_playlist', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        fetch('/update_playlist', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+        .then(() => alert("Sent to Display"));
     }
 
     function runApp(appName) {
-        fetch('/run_app', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({app: appName}) });
+        fetch('/run_app', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({app: appName}) })
+        .then(() => alert(`Started ${appName.toUpperCase()} App`));
     }
 
     function saveGlobal() {
@@ -659,12 +533,10 @@
             mbta_stop: document.getElementById('stopInput').value,
             mbta_route: document.getElementById('routeInput').value,
             stocks_list: document.getElementById('stockInput').value,
-            nhl_teams: document.getElementById('nhlInput').value,
-            yt_channel_id: document.getElementById('ytInput').value,
-            yt_api_key: document.getElementById('ytApiInput').value,
-            yt_video_id: document.getElementById('ytVideoInput').value
+            nhl_teams: document.getElementById('nhlInput').value
         };
-        fetch('/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        fetch('/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+        .then(() => alert("Settings Saved"));
     }
 
     function toggleAutoHome() {

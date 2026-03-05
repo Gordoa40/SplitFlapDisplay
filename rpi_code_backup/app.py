@@ -7,7 +7,6 @@ import logging
 import requests
 import pytz
 import yfinance as yf
-import re
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 
@@ -21,16 +20,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 serial_lock = threading.Lock()
 
 try:
-    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.5) 
+    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.5) # Reduced timeout for faster chunk looping
 except Exception as e:
     ser = None
     logging.error(f"Serial failed. Simulation Mode. Reason: {e}")
-
-# --- GLOBAL STATE TRACKING ---
-FLAP_CHARS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$&()-+=;q:%'.,/?*roygbpw"
-current_indices = [-1] * 45  
-current_display_string = " " * 45
-is_homed = False
 
 def load_settings():
     defaults = {
@@ -44,9 +37,6 @@ def load_settings():
         "mbta_route": "Orange",
         "stocks_list": "MSFT,GOOG,NVDA",
         "nhl_teams": "BOS,DAL",
-        "yt_channel_id": "UC2GJfspFn6o4liy6GaBFtHA",
-        "yt_api_key": "",
-        "yt_video_id": "",
         "auto_home": True
     }
     if os.path.exists(CONFIG_PATH):
@@ -54,8 +44,10 @@ def load_settings():
             with open(CONFIG_PATH, 'r') as f:
                 data = json.load(f)
                 defaults.update(data)
+                
                 if "tuned_chars" not in defaults:
                     defaults["tuned_chars"] = {str(i): {} for i in range(45)}
+                    
                 return defaults
         except: pass
     return defaults
@@ -77,26 +69,34 @@ def send_raw(cmd):
 
 def sync_hardware_data(mod_id):
     if not ser: return False
+    
     with serial_lock:
         ser.reset_input_buffer()
         ser.write(f"m{mod_id:02d}d\n".encode())
         ser.flush()
+        
         start = time.time()
         buffer = ""
         target = f"m{mod_id:02d}d:"
         
+        # Buffer aggregation loop: Absorbs all data, ignores RS485 garbage bytes
         while time.time() - start < 5.0: 
             if ser.in_waiting > 0:
                 try:
                     chunk = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
                     buffer += chunk
+                    
+                    # Wait until we see our target AND a newline character
                     if target in buffer and '\n' in buffer[buffer.find(target):]:
                         valid_part = buffer[buffer.find(target):].split('\n')[0]
+                        logging.info(f"RS485 Valid Sync: {valid_part}")
+                        
                         data = valid_part.split('d:', 1)[1]
                         parts = data.split(':')
                         if len(parts) >= 2:
                             settings['offsets'][str(mod_id)] = int(parts[0])
                             settings['calibrations'][str(mod_id)] = int(parts[1])
+                            
                             settings['tuned_chars'][str(mod_id)] = {}
                             if len(parts) == 3 and parts[2]:
                                 pairs = parts[2].split(',')
@@ -104,11 +104,14 @@ def sync_hardware_data(mod_id):
                                     if '=' in p:
                                         idx, val = p.split('=')
                                         settings['tuned_chars'][str(mod_id)][idx] = int(val)
+                            
                             save_settings(settings)
                             return True
                 except Exception as e:
                     logging.error(f"Parse error: {e}")
             time.sleep(0.05)
+            
+        logging.error(f"Sync Timeout. Raw buffer held: {buffer}")
     return False
 
 COLOR_MAP = {
@@ -117,17 +120,13 @@ COLOR_MAP = {
 }
 
 def send_to_display(text):
-    global current_indices, current_display_string, is_homed
-    if not text: return 0
-    
+    if not text: return
     clean_text = text.upper()
     for emoji, char in COLOR_MAP.items():
         clean_text = clean_text.replace(emoji, char)
         
     clean_text = clean_text.ljust(45)[:45]
     logging.info(f"DISPLAY: {clean_text}")
-    
-    max_dist = 0
     
     with serial_lock:
         if ser:
@@ -136,52 +135,32 @@ def send_to_display(text):
                 ser.write(cmd.encode())
                 ser.flush()
                 time.sleep(0.015) 
-                
-                target_idx = FLAP_CHARS.find(char)
-                if target_idx == -1: target_idx = 0
-                
-                if current_indices[i] == -1:
-                    dist = 128  
-                else:
-                    dist = (target_idx - current_indices[i]) % 64
-                    
-                if dist > max_dist:
-                    max_dist = dist
-                    
-                current_indices[i] = target_idx
-                
-    current_display_string = clean_text
-    is_homed = True  
-    
-    return max_dist
 
+# --- EXPLICIT GLOBAL APP STATE ---
 current_playlist = []
 loop_delay = 5
 stop_event = threading.Event()
 last_sent_page = None
 active_app = None                 
 
-last_fetches = {'weather': 0, 'metro': 0, 'sports': 0, 'stocks': 0, 'youtube': 0, 'yt_comments': 0}
-app_caches = {'weather': None, 'metro': [], 'sports': [], 'stocks': [], 'youtube': None, 'yt_comments': []}
+last_fetches = {'weather': 0, 'metro': 0, 'sports': 0, 'stocks': 0}
+app_caches = {'weather': "", 'metro': [], 'sports': [], 'stocks': []}
+
 
 @app.route('/')
 def index(): return render_template('index.html')
 
-@app.route('/current_state')
-def current_state():
-    return jsonify(is_homed=is_homed, state=current_display_string)
-
 @app.route('/settings', methods=['GET', 'POST'])
 def handle_settings():
-    global settings, is_homed, current_indices, current_display_string
+    global settings
     if request.method == 'POST':
         data = request.json
         action = data.get('action')
         mod_id = str(data.get('id', '0'))
 
         if action == 'save_global':
-            keys = ['zip_code','weather_api_key','timezone','mbta_stop','mbta_route','stocks_list','nhl_teams','yt_channel_id', 'yt_api_key', 'yt_video_id']
-            settings.update({k: data[k] for k in keys if k in data})
+            keys = ['zip_code','weather_api_key','timezone','mbta_stop','mbta_route','stocks_list','nhl_teams']
+            settings.update({k: data[k] for k in keys})
             save_settings(settings)
             return jsonify(status="Saved")
 
@@ -196,12 +175,6 @@ def handle_settings():
 
         if action == 'home_one':
             send_raw(f"m{int(mod_id):02d}h")
-            current_indices[int(mod_id)] = 0
-            
-            str_list = list(current_display_string.ljust(45))
-            str_list[int(mod_id)] = ' '
-            current_display_string = "".join(str_list)
-            
             return jsonify(status="Homing")
 
         if action == 'calibrate':
@@ -210,16 +183,21 @@ def handle_settings():
                     ser.reset_input_buffer() 
                     ser.write(f"m{int(mod_id):02d}c\n".encode())
                     ser.flush() 
+                    
                     start_wait = time.time()
                     buffer = ""
                     target = f"m{int(mod_id):02d}:"
                     
+                    # 45 second timeout to allow full 360 degree physical rotation
                     while (time.time() - start_wait) < 45.0: 
                         if ser.in_waiting > 0:
                             chunk = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
                             buffer += chunk
+                            
+                            # Filter garbage bytes and wait for newline
                             if target in buffer and '\n' in buffer[buffer.find(target):]:
                                 valid_part = buffer[buffer.find(target):].split('\n')[0]
+                                logging.info(f"RS485 Valid Calibration: {valid_part}")
                                 try:
                                     val = int(valid_part.split(target)[1])
                                     settings['calibrations'][mod_id] = val
@@ -234,22 +212,14 @@ def handle_settings():
 
 @app.route('/custom_tune', methods=['POST'])
 def custom_tune():
-    global current_indices, current_display_string
     data = request.json
     action = data.get('action')
     mod_id = int(data.get('id', 0))
             
     if action == 'goto':
         step = int(data.get('step', 0))
-        idx = int(data.get('index', 0))
         send_raw(f"m{mod_id:02d}g{step}")
         
-        if 0 <= idx < len(FLAP_CHARS):
-            current_indices[mod_id] = idx
-            str_list = list(current_display_string.ljust(45))
-            str_list[mod_id] = FLAP_CHARS[idx]
-            current_display_string = "".join(str_list)
-            
     elif action == 'save':
         idx = int(data.get('index', 0))
         step = int(data.get('step', 0))
@@ -324,44 +294,50 @@ def run_app():
 
 @app.route('/home_all')
 def home_all():
-    global is_homed, current_indices, current_display_string
     send_raw("m**h")
-    is_homed = True
-    current_indices = [0] * 45
-    current_display_string = " " * 45
     return jsonify(status="Homing All")
 
-# --- APP DATA FETCHERS ---
+
 def format_lines(l1, l2, l3):
     return l1.center(15)[:15] + l2.center(15)[:15] + l3.center(15)[:15]
 
-def fetch_weather_data():
+def fetch_weather():
     api_key = settings.get("weather_api_key", "").strip()
     zip_code = settings.get("zip_code", "02118").strip()
-    if not api_key: return None
+    tz_str = settings.get("timezone", "US/Eastern")
+    if not api_key: return format_lines("NO API KEY", "SET IN TAB", "")
     try:
         url = f"http://api.openweathermap.org/data/2.5/weather?zip={zip_code},us&appid={api_key}&units=imperial"
         res = requests.get(url, timeout=5).json()
-        return {
-            'city': res['name'].upper(),
-            'temp': round(res['main']['temp']),
-            'feels': round(res['main']['feels_like']),
-            'desc': res['weather'][0]['main'].upper(),
-            'high': round(res['main']['temp_max']),
-            'low': round(res['main']['temp_min'])
-        }
-    except: return None
+        city = res['name'].upper()
+        tz = pytz.timezone(tz_str)
+        now_time = datetime.now(tz).strftime("%I:%M%p").lstrip("0")
+        max_city_len = 14 - len(now_time) 
+        l1 = f"{city[:max_city_len]} {now_time}".center(15)
+        temp = round(res['main']['temp'])
+        feels = round(res['main']['feels_like'])
+        desc = res['weather'][0]['main'].upper()
+        l2_prefix = f"{temp}F ({feels}F) "
+        rem_len = 15 - len(l2_prefix)
+        l2 = (l2_prefix + desc[:rem_len]).center(15)
+        high = round(res['main']['temp_max'])
+        low = round(res['main']['temp_min'])
+        l3 = f"H:{high}F L:{low}F".center(15)
+        return l1 + l2 + l3
+    except Exception as e:
+        logging.error(f"Weather error: {e}")
+        return format_lines("WEATHER", "FETCH ERROR", "")
 
 def fetch_metro():
     stop = settings.get('mbta_stop', 'place-bbsta')
     route = settings.get('mbta_route', 'Orange')
-    url = f"https://api-v3.mbta.com/predictions?filter[stop]={stop}&filter[route]={route}&page[limit]=20&sort=departure_time"
+    url = f"https://api-v3.mbta.com/predictions?filter[stop]={stop}&filter[route]={route}&sort=departure_time"
     try:
         res = requests.get(url, timeout=5).json()
         predictions = res.get('data', [])
         dirs = {0: [], 1: []} 
         for p in predictions:
-            dt = p['attributes']['departure_time']
+            dt = p['attributes']['departure_time'] or p['attributes']['arrival_time']
             if not dt: continue
             pred_time = datetime.fromisoformat(dt).astimezone(pytz.utc)
             now = datetime.now(pytz.utc)
@@ -374,11 +350,13 @@ def fetch_metro():
             if not times: return f"{name} ---".ljust(15)
             t_str = ",".join(times) + "M"
             return f"{name} {t_str}"[:15].ljust(15)
-        l1 = "🟧🟧🟧NORTH STN🟧🟧🟧".center(15)
+        l1 = "BACK BAY STN.".center(15)
         l2 = format_dir("OAK GRV", dirs[1])
         l3 = format_dir("FRST HLS", dirs[0])
         return [l1 + l2 + l3]
-    except: return [format_lines("METRO ERROR", "", "")]
+    except Exception as e:
+        logging.error(f"Metro error: {e}")
+        return [format_lines("METRO ERROR", "", "")]
 
 def fetch_stocks():
     tickers = [t.strip() for t in settings.get('stocks_list', 'MSFT,GOOG,NVDA').split(',') if t.strip()]
@@ -398,7 +376,8 @@ def fetch_stocks():
                 c_str = f"{sym[:5]:<5} {sign}{pct:.2f}%"[:15].ljust(15)
                 price_lines[idx] = p_str
                 pct_lines[idx] = c_str
-            except:
+            except Exception as e:
+                logging.error(f"Stock error for {sym}: {e}")
                 err_str = f"{sym[:5]:<5} ERR".ljust(15)
                 price_lines[idx] = err_str
                 pct_lines[idx] = err_str
@@ -426,109 +405,20 @@ def fetch_sports():
         return pages if pages else [format_lines("NHL SCORES", "NO GAMES", "TODAY")]
     except: return [format_lines("SPORTS ERR", "", "")]
 
-def fetch_youtube_data():
-    channel_id = settings.get("yt_channel_id", "UC2GJfspFn6o4liy6GaBFtHA").strip()
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(f"https://mixerno.space/api/youtube-channel-counter/user/{channel_id}", headers=headers, timeout=5).json()
-        return {'name': res['user'][0]['count'].upper(), 'subs': res['counts'][0]['count']}
-    except Exception as e: 
-        logging.error(f"Mixerno fetch error: {e}")
-        pass
-        
-    try:
-        res = requests.get(f"https://axern.space/api/get?platform=youtube&type=channel&id={channel_id}", timeout=5).json()
-        return {'name': res['snippet']['title'].upper(), 'subs': res['statistics']['subscriberCount']}
-    except Exception as e: 
-        logging.error(f"Axern fetch error: {e}")
-        pass
-        
-    return None
-
-def fetch_youtube_comments():
-    api_key = settings.get("yt_api_key", "").strip()
-    video_id = settings.get("yt_video_id", "").strip()
-    if not api_key or not video_id:
-        return [format_lines("YT COMMENTS", "MISSING API KEY", "OR VIDEO ID")]
-    url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId={video_id}&maxResults=5&order=time&textFormat=plainText&key={api_key}"
-    try:
-        res = requests.get(url, timeout=5).json()
-        if 'items' not in res or not res['items']:
-            return [format_lines("YT COMMENTS", "NO COMMENTS", "FOUND")]
-        pages = []
-        for item in res['items']:
-            snippet = item['snippet']['topLevelComment']['snippet']
-            author = snippet['authorDisplayName'].upper()
-            author = ''.join(c for c in author if c in FLAP_CHARS)
-            text = snippet['textDisplay'].upper()
-            text = text.replace('\n', ' ').replace('\r', '')
-            pages.append(author[:15].center(15) + text[0:15].ljust(15) + text[15:30].ljust(15))
-        return pages if pages else [format_lines("YT COMMENTS", "FETCH ERROR", "")]
-    except: return [format_lines("YT COMMENTS", "API ERROR", "")]
-
 def playlist_loop():
     global current_playlist, loop_delay, last_sent_page, active_app, last_fetches, app_caches
     while True:
         now = time.time()
         display_pages = []
         
+        # Guard against NameError
         if 'active_app' not in globals() or active_app is None:
             display_pages = current_playlist
-        elif active_app == 'time':
-            tz = pytz.timezone(settings.get('timezone', 'US/Eastern'))
-            display_pages = [format_lines("", datetime.now(tz).strftime("%I:%M %p").lstrip("0").center(15), "")]
-        elif active_app == 'date':
-            tz = pytz.timezone(settings.get('timezone', 'US/Eastern'))
-            dt = datetime.now(tz)
-            display_pages = [format_lines(dt.strftime("%I:%M %p").lstrip("0").center(15), dt.strftime("%B %d").upper().center(15), dt.strftime("%A").upper().center(15))]
         elif active_app == 'weather':
-            if now - last_fetches['weather'] > 300: 
-                app_caches['weather'] = fetch_weather_data()
+            if now - last_fetches['weather'] > 600:
+                app_caches['weather'] = [fetch_weather()]
                 last_fetches['weather'] = now
-            w_data = app_caches['weather']
-            now_time = datetime.now(pytz.timezone(settings.get('timezone', 'US/Eastern'))).strftime("%I:%M%p").lstrip("0")
-            if not w_data:
-                display_pages = [format_lines("NO WEATHER DATA", now_time.center(15), "CHECK API KEY")]
-            else:
-                max_city_len = 14 - len(now_time) 
-                l1 = f"{w_data['city'][:max_city_len]} {now_time}".center(15)
-                l2_prefix = f"{w_data['temp']}F ({w_data['feels']}F) "
-                l2 = (l2_prefix + w_data['desc'][:15 - len(l2_prefix)]).center(15)
-                l3 = f"H:{w_data['high']}F L:{w_data['low']}F".center(15)
-                display_pages = [format_lines(l1, l2, l3)]
-        elif active_app == 'dashboard':
-            tz = pytz.timezone(settings.get('timezone', 'US/Eastern'))
-            dt = datetime.now(tz)
-            time_page = format_lines(dt.strftime("%A").upper(), dt.strftime("%b %d %Y").upper(), dt.strftime("%I:%M %p").upper())
-            if now - last_fetches['weather'] > 300:
-                app_caches['weather'] = fetch_weather_data()
-                last_fetches['weather'] = now
-            w_data = app_caches['weather']
-            now_time = dt.strftime("%I:%M%p").lstrip("0")
-            if not w_data:
-                weather_page = format_lines("NO WEATHER DATA", now_time.center(15), "CHECK API KEY")
-            else:
-                max_city_len = 14 - len(now_time) 
-                l1 = f"{w_data['city'][:max_city_len]} {now_time}".center(15)
-                l2_prefix = f"{w_data['temp']}F ({w_data['feels']}F) "
-                l2 = (l2_prefix + w_data['desc'][:15 - len(l2_prefix)]).center(15)
-                l3 = f"H:{w_data['high']}F L:{w_data['low']}F".center(15)
-                weather_page = format_lines(l1, l2, l3)
-            display_pages = [time_page, weather_page]
-        elif active_app == 'youtube':
-            if now - last_fetches['youtube'] > 30: 
-                app_caches['youtube'] = fetch_youtube_data()
-                last_fetches['youtube'] = now
-            yt_data = app_caches['youtube']
-            if not yt_data:
-                display_pages = [format_lines("YOUTUBE", "FETCH ERROR", "CHECK API")]
-            else:
-                display_pages = [format_lines("YOUTUBE", yt_data['name'][:15].center(15), f"{yt_data['subs']} SUBS".center(15))]
-        elif active_app == 'yt_comments':
-            if now - last_fetches['yt_comments'] > 60: 
-                app_caches['yt_comments'] = fetch_youtube_comments()
-                last_fetches['yt_comments'] = now
-            display_pages = app_caches.get('yt_comments', [format_lines("LOADING", "COMMENTS...", "")])
+            display_pages = app_caches['weather']
         elif active_app == 'metro':
             if now - last_fetches['metro'] > 30: 
                 app_caches['metro'] = fetch_metro()
@@ -544,6 +434,15 @@ def playlist_loop():
                 app_caches['sports'] = fetch_sports()
                 last_fetches['sports'] = now
             display_pages = app_caches['sports']
+        elif active_app == 'dashboard':
+            tz = pytz.timezone(settings.get('timezone', 'US/Eastern'))
+            dt = datetime.now(tz)
+            time_page = format_lines(dt.strftime("%A").upper(), dt.strftime("%b %d %Y").upper(), dt.strftime("%I:%M %p").upper())
+            if now - last_fetches['weather'] > 600:
+                app_caches['weather'] = [fetch_weather()]
+                last_fetches['weather'] = now
+            weather_page = app_caches['weather'][0]
+            display_pages = [time_page, weather_page]
         else:
             display_pages = current_playlist
 
@@ -553,21 +452,12 @@ def playlist_loop():
 
         for page in display_pages:
             if stop_event.is_set(): break
-            
-            max_dist = 0
             if page != last_sent_page:
-                max_dist = send_to_display(page)
+                send_to_display(page)
                 last_sent_page = page
-                
-            rotation_time = max_dist * (4.0 / 64.0) 
-            for _ in range(int(rotation_time * 10)):
-                if stop_event.is_set(): break
-                time.sleep(0.1)
-
             for _ in range(int(float(loop_delay)*10)):
                 if stop_event.is_set(): break
                 time.sleep(0.1)
-                
         if stop_event.is_set(): stop_event.clear()
 
 threading.Thread(target=playlist_loop, daemon=True).start()
