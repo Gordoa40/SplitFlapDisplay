@@ -7722,7 +7722,7 @@
 			(justify left bottom)
 		)
 	)
-	(gr_text "Split Flap Driver Board V2"
+	(gr_text "Split Flap Driver Board V3"
 		(at 124.85 138.65 0)
 		(layer "F.SilkS")
 		(uuid "9baacbf8-67dc-4cff-824a-5a9a0f0be997")
