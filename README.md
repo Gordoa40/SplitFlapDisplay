@@ -4,16 +4,14 @@ A modular, 3D-printed split-flap display controllable over RS485 from a Raspberr
 
 **YouTube Build Video:** https://www.youtube.com/watch?v=-C8_AtxEEQc
 
-**YouTube Channel:** https://www.youtube.com/@AdamGMakes
-
 ---
 
 ## How It Works
 
 Each module contains:
 - A 3D-printed drum that holds 64 individual flaps (one per character)
-- A 28BYJ-48 12V stepper motor driving the drum through a gear train
-- An A3200 Hall effect sensor for homing
+- A stepper motor driving the drum through a gear train
+- A Hall effect sensor for homing
 - A custom driver PCB (ATtiny1616 + RS485 transceiver + ULN2003 stepper driver)
 
 Modules communicate over a shared RS485 bus. A Raspberry Pi running a Python web interface sends commands over USB-RS485 to each module individually by address.
@@ -24,13 +22,13 @@ Modules communicate over a shared RS485 bus. A Raspberry Pi running a Python web
 
 ```
 CAD/                              - 3D printable parts (Bambu Lab profiles included)
-SplitFlapDriverATtiny1616 V2 KiCad/  - Driver PCB KiCad project
+SplitFlapDriverATtiny1616 V2 KiCad/  - Driver PCB KiCad that I used in the video, for my build
+SplitFlapDriverATtiny1616V3       - Updated Driver PCB KiCad project, which should be slightly cheaper to manufacture
 SplitFlapBusBoard KiCad/          - Bus board KiCad project
-SplitFlapFirmware/                - ATtiny1616 Arduino firmware
+SplitFlapFirmware/                - Arduino firmware for the PCBs
 SplitFlap-RPI-FRONTEND/           - Raspberry Pi Python web frontend
 Reference Docs/                   - Component datasheets
-BOM.md                            - Full bill of materials
-```
+BOM.md                            - Bill of materials
 
 ---
 
@@ -55,7 +53,7 @@ The driver board is designed to be ordered from JLCPCB with their PCB Assembly (
 3. Export to a folder, then zip the contents
 4. Also export the drill file from the same menu
 
-Alternatively, pre-exported Gerber and PCBA files may already be present in the KiCad project folder.
+Alternatively, pre-exported Gerber and PCBA files are already be present in the KiCad project folder.
 
 ### Step 2 — Upload to JLCPCB
 
@@ -102,9 +100,8 @@ Parts per module:
 
 Located in `SplitFlapFirmware/`. The firmware is Arduino-based and targets the ATtiny1616.
 
-- Flash via UPDI programmer using the J1 header on the driver board
-- Each module needs a unique address (0–44) stored in EEPROM
-- On boot, the module homes using the Hall effect sensor
+- Flash via UPDI programmer (see https://github.com/SpenceKonde/AVR-Guidance/blob/master/UPDI/jtag2updi.md if you need to make one)
+- Each module needs a unique address (0–44) stored in EEPROM. Be sure to edit this between flashes.
 
 ---
 
@@ -112,17 +109,7 @@ Located in `SplitFlapFirmware/`. The firmware is Arduino-based and targets the A
 
 Located in `SplitFlap-RPI-FRONTEND/`. A Python web interface running on a Raspberry Pi sends display commands over USB-RS485 at 115200 baud.
 
----
-
-## Assembly Order
-
-1. **Order PCBs** — follow the JLCPCB guide above
-2. **Print parts** — print all 3D parts per module
-3. **Solder headers** — hand-solder pin headers, JST connectors, and pogo pins onto the driver boards
-4. **Flash firmware** — program each board with a unique module address via UPDI
-5. **Assemble mechanics** — install motor, gears, drum, and flaps per the video tutorial
-6. **Wire up** — connect Hall effect sensor, stepper motor, and RS485 bus
-7. **Set up frontend** — run the Python web server on the Raspberry Pi
+Need a USB-serial dongle. I used this one: https://www.adafruit.com/product/5994
 
 ---
 

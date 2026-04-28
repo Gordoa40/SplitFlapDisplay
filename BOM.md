@@ -61,9 +61,11 @@ Note: R1 is a 0 Ohm resistor.
 | **28BYJ-48 12V Stepper Motor**| 1 | 45 |
 | Driver Board | 1 | 45 |
 | Pogo Pins | 4 | 180 |
+| 3x1mm N52 Magnet | 1 | 45 |
 | 3-Pin JST Connector | 1 | 45 |
 
 Note: Keep in mind, the driver boards are designed to be used with 12V motors, not the common 5V variety.
+
 ---
 
 ## Other Components (System-Level)
